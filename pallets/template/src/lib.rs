@@ -7,6 +7,8 @@ pub use pallet::*;
 pub mod pallet {
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
+	use frame_support::traits::ReservableCurrency;
+	use frame_support::traits::Currency;
 	use sp_std::vec::Vec; // Step 3.1 will include this in `Cargo.toml`
 
 	/// Configure the pallet by specifying the parameters and types on which it depends.
@@ -14,6 +16,10 @@ pub mod pallet {
 	pub trait Config: frame_system::Config {
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+
+		type Token: ReservableCurrency<Self::AccountId>;
+
+		type ReserveAmount: Get<<Self::Token as Currency<Self::AccountId>>::Balance>;
 	}
 
 	// Pallets use events to inform users when important changes are made.
@@ -48,7 +54,7 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
-
+	
 	// Dispatchable functions allow users to interact with the pallet and invoke state changes.
 	// These functions materialize as "extrinsics", which are often compared to transactions.
 	// Dispatchable functions must be annotated with a weight and must return a DispatchResult.
@@ -65,6 +71,9 @@ pub mod pallet {
 
 			// Verify that the specified proof has not already been claimed.
 			ensure!(!Proofs::<T>::contains_key(&proof), Error::<T>::ProofAlreadyClaimed);
+
+			// Try to reserve funds, and fail fast if the user can't afford it
+			T::Token::reserve(&sender, 1_000u32.into())?;
 
 			// Get the block number from the FRAME System pallet.
 			let current_block = <frame_system::Pallet<T>>::block_number();
@@ -95,6 +104,11 @@ pub mod pallet {
 
 			// Verify that sender of the current call is the claim owner.
 			ensure!(sender == owner, Error::<T>::NotProofOwner);
+
+			// Attempt to unreserve the funds from the user. We expect that they should
+			// have at least this much reserved because we reserved it earlier
+			// If for some reason there isn't enough reserved, its the user's problem
+			let _ = T::Token::unreserve(&sender, 1_000u32.into());
 
 			// Remove claim from storage.
 			Proofs::<T>::remove(&proof);
