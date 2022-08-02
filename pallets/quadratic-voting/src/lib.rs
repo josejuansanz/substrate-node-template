@@ -11,50 +11,70 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-#[cfg(feature = "runtime-benchmarks")]
-mod benchmarking;
-
 #[frame_support::pallet]
 pub mod pallet {
-	use frame_support::pallet_prelude::*;
+	use frame_support::{pallet_prelude::*, traits::ReservableCurrency};
 	use frame_system::pallet_prelude::*;
+	use sp_std::vec::Vec;
+
+	const NUM_INITIAL_TOKENS: i8 = 100;
 
 	/// Configure the pallet by specifying the parameters and types on which it depends.
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+
+		type Token: ReservableCurrency<Self::AccountId>;
 	}
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(_);
 
-	// The pallet's runtime storage items.
-	// https://docs.substrate.io/v3/runtime/storage
 	#[pallet::storage]
-	#[pallet::getter(fn something)]
-	// Learn more about declaring storage items:
-	// https://docs.substrate.io/v3/runtime/storage#declaring-storage-items
-	pub type Something<T> = StorageValue<_, u32>;
+	#[pallet::unbounded]
+	pub(super) type Proposals<T: Config> =
+		StorageMap<_, Blake2_128Concat, Vec<u8>, (T::AccountId, u8, i8), OptionQuery>;
+
+	#[pallet::storage]
+	#[pallet::unbounded]
+	pub(super) type Users<T: Config> =
+		StorageMap<_, Blake2_128Concat, T::AccountId, (Vec<u8>, i8), OptionQuery>;
+
+	#[pallet::storage]
+	#[pallet::unbounded]
+	pub(super) type UsersVotes<T: Config> =
+		StorageMap<_, Blake2_128Concat, T::AccountId, (Vec<u8>, i8), OptionQuery>;
 
 	// Pallets use events to inform users when important changes are made.
 	// https://docs.substrate.io/v3/runtime/events-and-errors
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// Event documentation should end with an array that provides descriptive names for event
-		/// parameters. [something, who]
-		SomethingStored(u32, T::AccountId),
+		/// Event emitted when a proposal has been added.
+		/// Parameters: [who, proposal]
+		ProposalAdded(T::AccountId, Vec<u8>),
+
+		/// Event emitted when a user has registered in a proposal.
+		/// Parameters: [who, proposal]
+		UserRegistered(T::AccountId, Vec<u8>),
+
+		/// Event emitted when a user has unregistered in a proposal.
+		/// Parameters: [who, proposal]
+		UserUnregistered(T::AccountId, Vec<u8>),
+		
+		/// Event emitted when a vote has been deposited.
+		/// Parameters: [who, proposal, num_votes]
+		VoteDeposited(T::AccountId, Vec<u8>, i8),
 	}
 
 	// Errors inform users that something went wrong.
 	#[pallet::error]
 	pub enum Error<T> {
-		/// Error names should be descriptive.
-		NoneValue,
-		/// Errors should have helpful documentation associated with them.
-		StorageOverflow,
+		InvalidProposal,
+		NotRegistered,
+		NotEnoughTokens,
 	}
 
 	// Dispatchable functions allows users to interact with the pallet and invoke state changes.
@@ -62,41 +82,153 @@ pub mod pallet {
 	// Dispatchable functions must be annotated with a weight and must return a DispatchResult.
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// An example dispatchable that takes a singles value as a parameter, writes the value to
-		/// storage and emits an event. This function must be dispatched by a signed extrinsic.
-		#[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
-		pub fn do_something(origin: OriginFor<T>, something: u32) -> DispatchResult {
-			// Check that the extrinsic was signed and get the signer.
-			// This function will return an error if the extrinsic is not signed.
-			// https://docs.substrate.io/v3/runtime/origins
-			let who = ensure_signed(origin)?;
 
-			// Update storage.
-			<Something<T>>::put(something);
+		#[pallet::weight(1_000)]
+		pub fn set_proposal(
+			origin: OriginFor<T>,
+			proposal: Vec<u8>,
+		) -> DispatchResult {
+			log::info!("!!! INIT setProposal");
+			
+			
+			let proposer = ensure_signed(origin)?;
+			log::info!("!!! PROPOSER: {:?}", proposer);
 
-			// Emit an event.
-			Self::deposit_event(Event::SomethingStored(something, who));
-			// Return a successful DispatchResultWithPostInfo
+			log::info!("!!! PROPOSAL: {:?}", proposal);
+
+			// Store the proposal with the proposer and active status.
+			let active = 1;
+			Proposals::<T>::insert(&proposal, (&proposer, active, 0));
+
+			// Emit an event that the user was registered.
+			Self::deposit_event(Event::ProposalAdded(proposer, proposal));
+
 			Ok(())
 		}
 
-		/// An example dispatchable that may throw a custom error.
-		#[pallet::weight(10_000 + T::DbWeight::get().reads_writes(1,1))]
-		pub fn cause_error(origin: OriginFor<T>) -> DispatchResult {
-			let _who = ensure_signed(origin)?;
+		#[pallet::weight(1_000)]
+		pub fn register(
+			origin: OriginFor<T>,
+			proposal: Vec<u8>,
+		) -> DispatchResult {
 
-			// Read a value from storage.
-			match <Something<T>>::get() {
-				// Return an error if the value has not been set.
-				None => return Err(Error::<T>::NoneValue.into()),
-				Some(old) => {
-					// Increment the value read from storage; will error in the event of overflow.
-					let new = old.checked_add(1).ok_or(Error::<T>::StorageOverflow)?;
-					// Update the value in storage with the incremented result.
-					<Something<T>>::put(new);
-					Ok(())
-				},
-			}
+			log::info!("!!! INIT register");
+			
+			
+			let user = ensure_signed(origin)?;
+			log::info!("!!! USER: {:?}", user);
+			log::info!("!!! PROPOSAL: {:?}", proposal);
+
+			// Verify that the proposal exists.
+			ensure!(Proposals::<T>::contains_key(&proposal), Error::<T>::InvalidProposal);
+
+			// Lock user's tokens
+			// Try to reserve funds, and fail fast if the user can't afford it
+			T::Token::reserve(&user, 1_000u32.into())?;
+			
+			// Store the proposal with the proposer and active status.
+			Users::<T>::insert(&user, (&proposal, NUM_INITIAL_TOKENS));
+
+			// Emit an event that the user was registered.
+			Self::deposit_event(Event::UserRegistered(user, proposal));
+
+			Ok(())
 		}
+
+		#[pallet::weight(1_000)]
+		pub fn unregister(
+			origin: OriginFor<T>,
+			proposal: Vec<u8>,
+		) -> DispatchResult {
+
+			log::info!("!!! INIT unregister");
+			
+			
+			let user = ensure_signed(origin)?;
+			log::info!("!!! USER: {:?}", user);
+			log::info!("!!! PROPOSAL: {:?}", proposal);
+
+			// Verify that the proposal exists.
+			ensure!(Proposals::<T>::contains_key(&proposal), Error::<T>::InvalidProposal);
+
+			// Verify that the user is registered.
+			ensure!(Users::<T>::contains_key(&user), Error::<T>::NotRegistered);
+
+			// Unlock user's tokens
+			// Attempt to unreserve the funds from the user. We expect that they should
+			// have at least this much reserved because we reserved it earlier
+			// If for some reason there isn't enough reserved, its the user's problem
+			let _ = T::Token::unreserve(&user, 1_000u32.into());
+			
+			// Store the proposal with the proposer and active status.
+			Users::<T>::remove(&user);
+
+			// Update proposal total votes
+			if UsersVotes::<T>::contains_key(&user) {
+				let (_, num_votes) = UsersVotes::<T>::get(&user).expect("Already check that user exists.");
+				let (proposer, active, proposal_votes) = Proposals::<T>::get(&proposal).expect("Already check that proposal exists.");
+				
+				let total_current_votes = proposal_votes - num_votes;
+				Proposals::<T>::insert(&proposal, (&proposer, active, total_current_votes));
+			}
+			
+			// Emit an event that the user was unregistered.
+			Self::deposit_event(Event::UserUnregistered(user, proposal));
+
+			Ok(())
+		}
+
+		#[pallet::weight(1_000)]
+		pub fn vote(
+			origin: OriginFor<T>,
+			num_votes: i8,
+			proposal: Vec<u8>,
+		) -> DispatchResult {
+
+			log::info!("!!! INIT vote");
+						
+			let voter = ensure_signed(origin)?;
+			log::info!("!!! VOTER: {:?}", voter);
+			log::info!("!!! NUM VOTES: {:?}", num_votes);
+			log::info!("!!! PROPOSAL: {:?}", proposal);
+			
+			// Verify that the proposal exists.
+			ensure!(Proposals::<T>::contains_key(&proposal), Error::<T>::InvalidProposal);
+
+			// Verify that the user is registered in the voting.
+			ensure!(Users::<T>::contains_key(&voter), Error::<T>::NotRegistered);
+
+			let current_num_votes;
+			if UsersVotes::<T>::contains_key(&voter) {
+				let (_, previous_num_votes) = UsersVotes::<T>::get(&voter).expect("Already check that value exists.");
+				current_num_votes = previous_num_votes + num_votes;
+			} else {
+				current_num_votes = num_votes;
+			}
+
+			let current_vote_tokens = current_num_votes.pow(2);
+
+			let current_user_tokens = NUM_INITIAL_TOKENS - current_vote_tokens;
+			ensure!(current_user_tokens >= 0, Error::<T>::NotEnoughTokens);
+			
+			Users::<T>::insert(&voter, (&proposal, current_user_tokens));
+
+			if current_num_votes == 0 {
+				UsersVotes::<T>::remove(&voter);
+			} else {
+				UsersVotes::<T>::insert(&voter, (&proposal, current_num_votes));
+			}
+			
+			// Update proposal total votes
+			let (proposer, active, previous_proposal_votes) = Proposals::<T>::get(&proposal).expect("Already check that proposal exists.");
+			let total_current_votes = previous_proposal_votes + num_votes;
+			Proposals::<T>::insert(&proposal, (&proposer, active, total_current_votes));
+			
+			// Emit an event that the vote was deposited.
+			Self::deposit_event(Event::VoteDeposited(voter, proposal, num_votes));
+
+			Ok(())
+		}
+
 	}
 }

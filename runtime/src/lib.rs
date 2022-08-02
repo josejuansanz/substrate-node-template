@@ -265,6 +265,7 @@ impl pallet_sudo::Config for Runtime {
 /// Configure the pallet-quadratic-voting in pallets/template.
 impl pallet_quadratic_voting::Config for Runtime {
 	type Event = Event;
+	type Token = Balances;
 }
 
 // Create the runtime by composing the FRAME pallets that were previously configured.
