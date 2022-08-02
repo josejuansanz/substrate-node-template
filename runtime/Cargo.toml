@@ -49,6 +49,7 @@ frame-system-benchmarking = { version = "4.0.0-dev", default-features = false, g
 hex-literal = { version = "0.3.4", optional = true }
 
 # Local Dependencies
+pallet-identity-voting = { version = "1.0.0-dev", default-features = false, path = "../pallets/identity-voting" }
 pallet-quadratic-voting = { version = "1.0.0-dev", default-features = false, path = "../pallets/quadratic-voting" }
 
 [build-dependencies]
@@ -66,6 +67,7 @@ std = [
 	"pallet-aura/std",
 	"pallet-balances/std",
 	"pallet-grandpa/std",
+	"pallet-identity-voting/std",
 	"pallet-randomness-collective-flip/std",
 	"pallet-sudo/std",
 	"pallet-quadratic-voting/std",
@@ -92,6 +94,7 @@ runtime-benchmarks = [
 	"hex-literal",
 	"pallet-balances/runtime-benchmarks",
 	"pallet-grandpa/runtime-benchmarks",
+	"pallet-identity-voting/runtime-benchmarks",
 	"pallet-quadratic-voting/runtime-benchmarks",
 	"pallet-timestamp/runtime-benchmarks",
 	"sp-runtime/runtime-benchmarks",
@@ -103,6 +106,7 @@ try-runtime = [
 	"pallet-aura/try-runtime",
 	"pallet-balances/try-runtime",
 	"pallet-grandpa/try-runtime",
+	"pallet-identity-voting/try-runtime",
 	"pallet-randomness-collective-flip/try-runtime",
 	"pallet-sudo/try-runtime",
 	"pallet-quadratic-voting/try-runtime",

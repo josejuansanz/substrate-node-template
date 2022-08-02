@@ -263,6 +263,17 @@ impl pallet_sudo::Config for Runtime {
 }
 
 /// Configure the pallet-quadratic-voting in pallets/template.
+impl pallet_identity_voting::Config for Runtime {
+	type Event = Event;
+
+	type Token = Balances;
+	
+	// Configure the FRAME System Root origin as the Identity pallet admin.
+	// https://paritytech.github.io/substrate/master/frame_system/enum.RawOrigin.html#variant.Root
+	type ForceOrigin = frame_system::EnsureRoot<AccountId>;
+}
+
+/// Configure the pallet-quadratic-voting in pallets/template.
 impl pallet_quadratic_voting::Config for Runtime {
 	type Event = Event;
 	type Token = Balances;
@@ -283,6 +294,8 @@ construct_runtime!(
 		Balances: pallet_balances,
 		TransactionPayment: pallet_transaction_payment,
 		Sudo: pallet_sudo,
+		// Include the custom logic from the pallet-identity-voting in the runtime.
+		IdentityVoting: pallet_identity_voting,
 		// Include the custom logic from the pallet-quadratic-voting in the runtime.
 		QuadraticVoting: pallet_quadratic_voting,
 	}
