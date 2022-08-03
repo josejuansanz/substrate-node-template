@@ -1,29 +1,25 @@
-use crate::{mock::*, Error};
-use frame_support::{assert_noop, assert_ok};
-use codec::{Decode, Encode, Joiner};
-
-// #[test]
-// fn it_works_for_default_value() {
-// 	new_test_ext().execute_with(|| {
-// 		// Dispatch a signed extrinsic.
-// 		assert_ok!(QuadraticVoting::do_something(Origin::signed(1), 42));
-// 		// Read pallet storage and assert an expected result.
-// 		assert_eq!(QuadraticVoting::something(), Some(42));
-// 	});
-// }
-
-// #[test]
-// fn correct_error_for_none_value() {
-// 	new_test_ext().execute_with(|| {
-
-// 		// Ensure the expected error is thrown when no value is present.
-// 		assert_noop!(QuadraticVoting::cause_error(Origin::signed(1)), Error::<Test>::NoneValue);
-// 	});
-// }
+use crate::{mock::*};
+use frame_support::{assert_ok, assert_noop};
+use codec::{Encode};
+use sp_runtime::traits::BadOrigin;
+use crate as pallet_identity;
 
 #[test]
-fn it_works_for_default_value() {
+fn setting_new_identity_works() {
+	let account = 0x432445325;
+	let name = String::from("Jhonny").encode();
 	new_test_ext().execute_with(|| {
-		assert_eq!(String::from("test").encode(), [116, 101, 115, 116]);
+		assert_ok!(IdentityVoting::set_identity(Origin::signed(2), account, name.clone()));
+		assert_noop!(IdentityVoting::set_identity(Origin::signed(10), account, name.clone()), BadOrigin);
+		assert_noop!(IdentityVoting::set_identity(Origin::signed(2), account, Vec::new()), pallet_identity::Error::<Test>::EmptyName);
+	});
+}
+
+#[test]
+fn removing_identity_works() {
+	let account = 0x432445325;
+	new_test_ext().execute_with(|| {
+		assert_noop!(IdentityVoting::remove_identity(Origin::signed(10), account, ), BadOrigin);
+		assert_noop!(IdentityVoting::remove_identity(Origin::signed(2), account), pallet_identity::Error::<Test>::AccountHasNoIdentity);
 	});
 }

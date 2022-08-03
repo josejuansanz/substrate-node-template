@@ -1,29 +1,36 @@
-use crate::{mock::*, Error};
-use frame_support::{assert_noop, assert_ok};
-use codec::{Decode, Encode, Joiner};
-
-// #[test]
-// fn it_works_for_default_value() {
-// 	new_test_ext().execute_with(|| {
-// 		// Dispatch a signed extrinsic.
-// 		assert_ok!(QuadraticVoting::do_something(Origin::signed(1), 42));
-// 		// Read pallet storage and assert an expected result.
-// 		assert_eq!(QuadraticVoting::something(), Some(42));
-// 	});
-// }
-
-// #[test]
-// fn correct_error_for_none_value() {
-// 	new_test_ext().execute_with(|| {
-
-// 		// Ensure the expected error is thrown when no value is present.
-// 		assert_noop!(QuadraticVoting::cause_error(Origin::signed(1)), Error::<Test>::NoneValue);
-// 	});
-// }
+use crate::{mock::*};
+use frame_support::{assert_ok, assert_noop};
+use codec::{Encode};
+use crate as pallet_quadratic_voting;
 
 #[test]
-fn it_works_for_default_value() {
+fn setting_new_proposal_works() {
+	let proposal = String::from("This is a test proposal").encode();
 	new_test_ext().execute_with(|| {
-		assert_eq!(String::from("test").encode(), [116, 101, 115, 116]);
+		assert_ok!(QuadraticVoting::set_proposal(Origin::signed(1), proposal.clone()));
+		assert_noop!(QuadraticVoting::set_proposal(Origin::signed(1), Vec::new()), pallet_quadratic_voting::Error::<Test>::EmptyProposal);
+	});
+}
+
+#[test]
+fn registering_user_works() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(QuadraticVoting::register(Origin::signed(1)));
+	});
+}
+
+#[test]
+fn unregistering_user_works() {
+	new_test_ext().execute_with(|| {
+		assert_noop!(QuadraticVoting::unregister(Origin::signed(1)), pallet_quadratic_voting::Error::<Test>::NotRegistered);
+	});
+}
+
+#[test]
+fn voting_works() {
+	let num_votes = 1;
+	let proposal = String::from("This is a test proposal").encode();
+	new_test_ext().execute_with(|| {
+		assert_noop!(QuadraticVoting::vote(Origin::signed(1), num_votes, proposal), pallet_quadratic_voting::Error::<Test>::InvalidProposal);
 	});
 }

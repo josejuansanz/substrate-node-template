@@ -1,10 +1,14 @@
 use crate as pallet_identity_voting;
-use frame_support::traits::{ConstU16, ConstU64};
+use frame_support::{
+	ord_parameter_types,
+	traits::{ConstU16, ConstU64, EitherOfDiverse},
+};
 use frame_system as system;
+use frame_system::{EnsureRoot, EnsureSignedBy};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
-	traits::{BlakeTwo256, IdentityLookup},
+	traits::{BlakeTwo256, IdentityLookup,},
 };
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -49,8 +53,16 @@ impl system::Config for Test {
 	type MaxConsumers = frame_support::traits::ConstU32<16>;
 }
 
+ord_parameter_types! {
+	pub const One: u64 = 1;
+	pub const Two: u64 = 2;
+}
+// type EnsureOneOrRoot = EitherOfDiverse<EnsureRoot<u64>, EnsureSignedBy<One, u64>>;
+type EnsureTwoOrRoot = EitherOfDiverse<EnsureRoot<u64>, EnsureSignedBy<Two, u64>>;
 impl pallet_identity_voting::Config for Test {
 	type Event = Event;
+	type Token = ();
+	type ForceOrigin = EnsureTwoOrRoot;
 }
 
 // Build genesis storage according to the mock runtime.

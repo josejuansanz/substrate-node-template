@@ -54,9 +54,8 @@ pub mod pallet {
 	// Errors inform users that something went wrong.
 	#[pallet::error]
 	pub enum Error<T> {
-		// InvalidProposal,
-		// NotRegistered,
-		// NotEnoughTokens,
+		EmptyName,
+		AccountHasNoIdentity,
 	}
 
 	// Dispatchable functions allows users to interact with the pallet and invoke state changes.
@@ -71,19 +70,16 @@ pub mod pallet {
 			account: T::AccountId,
 			name: Vec<u8>,
 		) -> DispatchResult {
-			log::info!("!!! INIT setIdentity");
-
 			T::ForceOrigin::ensure_origin(origin)?;
 			
-			
-			log::info!("!!! ACCOUNT: {:?}", account);
-
-			log::info!("!!! NAME: {:?}", name);
+			ensure!(!name.is_empty(), Error::<T>::EmptyName);
 
 			// Store the identity with the name.
 			Identities::<T>::insert(&account, &name);
 
-			// TODO: Lock tokens??
+			// Lock user's tokens
+			// Try to reserve funds, and fail fast if the user can't afford it
+			T::Token::reserve(&account, 1_000u32.into())?;
 
 			// Emit an event that the identity was added.
 			Self::deposit_event(Event::IdentityAdded(account, name));
@@ -96,16 +92,17 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			account: T::AccountId,
 		) -> DispatchResult {
-			log::info!("!!! INIT setIdentity");
-
 			T::ForceOrigin::ensure_origin(origin)?;
 			
-			log::info!("!!! ACCOUNT: {:?}", account);
+			// Verify that the user is registered.
+			ensure!(Identities::<T>::contains_key(&account), Error::<T>::AccountHasNoIdentity);
 
 			// Remove the identity.
 			Identities::<T>::remove(&account);
 
-			// TODO: Unlock tokens??
+			// Unlock user's tokens
+			// Attempt to unreserve the funds from the user.
+			let _ = T::Token::unreserve(&account, 1_000u32.into());
 
 			// Emit an event that the user was registered.
 			Self::deposit_event(Event::IdentityRemoved(account));

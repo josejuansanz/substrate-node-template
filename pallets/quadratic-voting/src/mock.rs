@@ -51,6 +51,7 @@ impl system::Config for Test {
 
 impl pallet_quadratic_voting::Config for Test {
 	type Event = Event;
+	type Token = ();
 }
 
 // Build genesis storage according to the mock runtime.
