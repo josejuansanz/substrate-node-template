@@ -40,7 +40,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::unbounded]
 	pub(super) type Users<T: Config> =
-		StorageMap<_, Blake2_128Concat, T::AccountId, (Vec<u8>, i8), OptionQuery>;
+		StorageMap<_, Blake2_128Concat, T::AccountId, i8, OptionQuery>;
 
 	#[pallet::storage]
 	#[pallet::unbounded]
@@ -57,12 +57,12 @@ pub mod pallet {
 		ProposalAdded(T::AccountId, Vec<u8>),
 
 		/// Event emitted when a user has registered in a proposal.
-		/// Parameters: [who, proposal]
-		UserRegistered(T::AccountId, Vec<u8>),
+		/// Parameters: [who]
+		UserRegistered(T::AccountId),
 
 		/// Event emitted when a user has unregistered in a proposal.
-		/// Parameters: [who, proposal]
-		UserUnregistered(T::AccountId, Vec<u8>),
+		/// Parameters: [who]
+		UserUnregistered(T::AccountId),
 		
 		/// Event emitted when a vote has been deposited.
 		/// Parameters: [who, proposal, num_votes]
@@ -109,7 +109,6 @@ pub mod pallet {
 		#[pallet::weight(1_000)]
 		pub fn register(
 			origin: OriginFor<T>,
-			proposal: Vec<u8>,
 		) -> DispatchResult {
 
 			log::info!("!!! INIT register");
@@ -117,20 +116,16 @@ pub mod pallet {
 			
 			let user = ensure_signed(origin)?;
 			log::info!("!!! USER: {:?}", user);
-			log::info!("!!! PROPOSAL: {:?}", proposal);
-
-			// Verify that the proposal exists.
-			ensure!(Proposals::<T>::contains_key(&proposal), Error::<T>::InvalidProposal);
 
 			// Lock user's tokens
 			// Try to reserve funds, and fail fast if the user can't afford it
 			T::Token::reserve(&user, 1_000u32.into())?;
 			
-			// Store the proposal with the proposer and active status.
-			Users::<T>::insert(&user, (&proposal, NUM_INITIAL_TOKENS));
+			// Store the user and initialize his tokens
+			Users::<T>::insert(&user, NUM_INITIAL_TOKENS);
 
 			// Emit an event that the user was registered.
-			Self::deposit_event(Event::UserRegistered(user, proposal));
+			Self::deposit_event(Event::UserRegistered(user));
 
 			Ok(())
 		}
@@ -138,7 +133,6 @@ pub mod pallet {
 		#[pallet::weight(1_000)]
 		pub fn unregister(
 			origin: OriginFor<T>,
-			proposal: Vec<u8>,
 		) -> DispatchResult {
 
 			log::info!("!!! INIT unregister");
@@ -146,10 +140,6 @@ pub mod pallet {
 			
 			let user = ensure_signed(origin)?;
 			log::info!("!!! USER: {:?}", user);
-			log::info!("!!! PROPOSAL: {:?}", proposal);
-
-			// Verify that the proposal exists.
-			ensure!(Proposals::<T>::contains_key(&proposal), Error::<T>::InvalidProposal);
 
 			// Verify that the user is registered.
 			ensure!(Users::<T>::contains_key(&user), Error::<T>::NotRegistered);
@@ -163,17 +153,16 @@ pub mod pallet {
 			// Store the proposal with the proposer and active status.
 			Users::<T>::remove(&user);
 
-			// Update proposal total votes
-			if UsersVotes::<T>::contains_key(&user) {
-				let (_, num_votes) = UsersVotes::<T>::get(&user).expect("Already check that user exists.");
-				let (proposer, active, proposal_votes) = Proposals::<T>::get(&proposal).expect("Already check that proposal exists.");
-				
-				let total_current_votes = proposal_votes - num_votes;
-				Proposals::<T>::insert(&proposal, (&proposer, active, total_current_votes));
+			for (who, (proposal, num_votes)) in UsersVotes::<T>::iter() {
+				if who == user {
+					let (proposer, active, proposal_votes) = Proposals::<T>::get(&proposal).expect("Already check that proposal exists.");
+					let total_current_votes = proposal_votes - num_votes;
+					Proposals::<T>::insert(&proposal, (&proposer, active, total_current_votes));
+				}
 			}
-			
+
 			// Emit an event that the user was unregistered.
-			Self::deposit_event(Event::UserUnregistered(user, proposal));
+			Self::deposit_event(Event::UserUnregistered(user));
 
 			Ok(())
 		}
@@ -211,7 +200,7 @@ pub mod pallet {
 			let current_user_tokens = NUM_INITIAL_TOKENS - current_vote_tokens;
 			ensure!(current_user_tokens >= 0, Error::<T>::NotEnoughTokens);
 			
-			Users::<T>::insert(&voter, (&proposal, current_user_tokens));
+			Users::<T>::insert(&voter, current_user_tokens);
 
 			if current_num_votes == 0 {
 				UsersVotes::<T>::remove(&voter);
